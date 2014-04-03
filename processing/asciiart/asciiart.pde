@@ -4,6 +4,8 @@ import processing.serial.*;
 import gab.opencv.*;
 import java.awt.Rectangle;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.core.Mat;
+import org.opencv.core.Core;
 
 Serial myPort;
 
@@ -22,7 +24,7 @@ final int buttonWidth = 100;
 final int buttonHeight = 20;
 final int buttonMargin = 10;
 
-final boolean detectFaces = false, drawBlocks = false;
+final boolean detectFaces = true, drawBlocks = false;
 
 OpenCV opencv;
 Capture cam;
@@ -44,8 +46,6 @@ void setup() {
   frameRate(10);
   
   opencv = new OpenCV(this, imageWidth, imageHeight);
-//  opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE);
-
   try {  
     myPort = new Serial(this, serialDev, 115200);
     println("serial port opened");
@@ -59,9 +59,13 @@ void setup() {
 }
 
 int counter = 0;
+int frameNumber = 0;
+Rectangle[] faces;
 
 void draw() {
   if (cam.available()) {
+    frameNumber++;
+
     background(255);
     cam.read();
     opencv.loadImage(cam);
@@ -71,18 +75,25 @@ void draw() {
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_Lab2RGB);
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_RGB2BGRA);
     
-//    opencv.contrast(map(mouseX, 0, width, 0, 3));
+    opencv.contrast(map(mouseY, 0, height, 0, 3));
 //    opencv.brightness((int)Math.round(map(mouseY, 0, height, -255, 255)));
-//    opencv.threshold((int)Math.round(map(mouseX, 0, width, 50, 100)));
+//    opencv.threshold(99);
+
+    Mat original = opencv.getGray().clone();
+    opencv.threshold((int)Math.round(map(mouseX, 0, width, 60, 140)));
+    Core.add(opencv.getGray(), original, original);
+    opencv.setGray(original);    
 
     PImage img = opencv.getOutput();
     
     image(img, 0, 0);
     
-    if (detectFaces) {
+    if (detectFaces && frameNumber % 5 == 0) {
       // Do face detection
-      Rectangle[] faces;
       faces = opencv.detect();
+    }
+    
+    if (detectFaces && faces != null) {
       noFill();
       stroke(0, 255, 0);
       strokeWeight(3);
@@ -103,16 +114,19 @@ void draw() {
     }
 
     // Draw the button
-    fill(255);
-    stroke(255, 0, 0);
-    strokeWeight(3);
-    rect(width - buttonWidth - buttonMargin, height - buttonHeight - buttonMargin,
-      buttonWidth, buttonHeight);
-    fill(0);
-    stroke(0);
-    textAlign(CENTER, CENTER);
-    text("PRINT", width - buttonMargin - buttonWidth/2.0,
-      height - buttonMargin - buttonHeight/2.0);
+//    fill(255);
+//    stroke(255, 0, 0);
+//    strokeWeight(3);
+//    rect(width - buttonWidth - buttonMargin, height - buttonHeight - buttonMargin,
+//      buttonWidth, buttonHeight);
+//    fill(0);
+//    stroke(0);
+//    textAlign(CENTER, CENTER);
+//    text("PRINT", width - buttonMargin - buttonWidth/2.0,
+//      height - buttonMargin - buttonHeight/2.0);
+
+      fill(0, 0, 255);
+      text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-20);
   }
 }
 
@@ -182,11 +196,15 @@ boolean isPrinting = false;
 
 int lastPrintDone = 0;
 
-void mousePressed() {
-  if (! (mouseX >= width - buttonMargin - buttonWidth &&
-         mouseX <= width - buttonMargin &&
-         mouseY >= height - buttonMargin - buttonHeight &&
-         mouseY <= height - buttonMargin)) {
+void keyPressed() {
+//  if (! (mouseX >= width - buttonMargin - buttonWidth &&
+//         mouseX <= width - buttonMargin &&
+//         mouseY >= height - buttonMargin - buttonHeight &&
+//         mouseY <= height - buttonMargin)) {
+//    return;
+//  }
+
+  if (key != 'p') {
     return;
   }
 
@@ -198,15 +216,34 @@ void mousePressed() {
   if (ascii != null && myPort != null) {
     isPrinting = true;
     println("typing portrait...");
-    for (String s : ascii) {
-      // make sure each row takes at least 15 seconds
-      int m = millis();
-      myPort.write(s);
-      while (millis() < m + 12*1000);
-    }
     lastPrintDone = millis();
+    printAscii();
     println("done");
     isPrinting = false;
   }
 }
 
+void printAscii() {
+  for (String s : ascii) {    
+    // If all blank, just hit return
+    boolean blank = true;
+    for (int i = 0; i < s.length() - 1; i++) {
+      if (s.charAt(i) != ' ') {
+        blank = false;
+      }
+    }
+    
+    int m = millis();
+
+    if (!blank) {
+      // make sure each row takes at least 15 seconds
+      myPort.write(s);
+      while (millis() < m + 12*1000);
+    } else {
+      // make sure each newline takes at least 1 second
+      myPort.write("\n");
+      while (millis() < m + 1000);
+    }
+    
+  }
+}
