@@ -9,7 +9,7 @@ import org.opencv.core.Core;
 
 Serial myPort;
 
-String serialDev = "/dev/cu.usbserial-AH00ZNA4";
+final String serialDev = "/dev/cu.usbserial-AH00ZNA4";
 
 final float rWeight = 0.2989;
 final float gWeight = 0.5866;
@@ -24,7 +24,9 @@ final int buttonWidth = 100;
 final int buttonHeight = 20;
 final int buttonMargin = 10;
 
-final boolean detectFaces = true, drawBlocks = false;
+// Features configuration
+final boolean detectFaces = false,
+              drawBlocks = false;
 
 OpenCV opencv;
 Capture cam;
@@ -76,13 +78,13 @@ void draw() {
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_RGB2BGRA);
     
     opencv.contrast(map(mouseY, 0, height, 0, 3));
-//    opencv.brightness((int)Math.round(map(mouseY, 0, height, -255, 255)));
-//    opencv.threshold(99);
-
     Mat original = opencv.getGray().clone();
-    opencv.threshold((int)Math.round(map(mouseX, 0, width, 60, 140)));
-    Core.add(opencv.getGray(), original, original);
-    opencv.setGray(original);    
+    opencv.threshold((int)Math.round(map(mouseX, 0, width, 100, 200)));
+    Core.bitwise_and(opencv.getGray(), original, original);
+    
+    Core.flip(original, original, OpenCV.VERTICAL);
+    
+    opencv.setGray(original);
 
     PImage img = opencv.getOutput();
     
@@ -113,20 +115,8 @@ void draw() {
       text(row, imageWidth + 10, textY);
     }
 
-    // Draw the button
-//    fill(255);
-//    stroke(255, 0, 0);
-//    strokeWeight(3);
-//    rect(width - buttonWidth - buttonMargin, height - buttonHeight - buttonMargin,
-//      buttonWidth, buttonHeight);
-//    fill(0);
-//    stroke(0);
-//    textAlign(CENTER, CENTER);
-//    text("PRINT", width - buttonMargin - buttonWidth/2.0,
-//      height - buttonMargin - buttonHeight/2.0);
-
-      fill(0, 0, 255);
-      text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-20);
+    fill(0, 0, 255);
+    text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-20);
   }
 }
 
