@@ -116,7 +116,9 @@ void draw() {
     }
 
     fill(0, 0, 255);
-    text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-20);
+    text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-40);
+    fill(255, 0, 0);
+    text("TOP OF PAPER MUST ALIGN WITH TOP OF CLEAR LID (we will reverse)", imageWidth+10, imageHeight-20);
   }
 }
 
@@ -205,6 +207,13 @@ void keyPressed() {
   
   if (ascii != null && myPort != null) {
     isPrinting = true;
+    println("reversing 16 times to align correctly");
+    for (int i = 0; i < 16; i++) {
+      // should take 750 ms
+      int m = millis();
+      myPort.write(14);
+      while (millis() < m + 750);
+    }
     println("typing portrait...");
     lastPrintDone = millis();
     printAscii();

@@ -23,6 +23,7 @@ void type(int8_t row, int8_t col, int8_t mod) {
   } else if (mod == 2) {
     row2_pin = rows[6];
     col2_pin = cols[7];
+    type(6, 7, -1);
   }
 
   // We only assert the column for the last 100 us of the period
@@ -300,6 +301,9 @@ void loop() {
         break;
       case '[':
         type(4, 0, 1);
+        break;
+      case 14:
+        type(2, 4, 2);
         break;
       default:
         type(7, 1, 1);
