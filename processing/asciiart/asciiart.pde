@@ -7,56 +7,66 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Mat;
 import org.opencv.core.Core;
 
-Serial myPort;
-
+// This will probably be something like /dev/ttyUSB0 on Linux
+// and COM17 on Windows. We could add a user interface for this
+// but we are lazy.
 final String serialDev = "/dev/cu.usbserial-AH00ZNA4";
 
-final float rWeight = 0.2989;
-final float gWeight = 0.5866;
-final float bWeight = 0.1145;
-
+// Width and height in ASCII characters
+// Aspect ratio may not necessarily match pixels because
+// the typewriter's font is not square
 final int asciiWidth = 60;
 final int asciiHeight = 30;
+
+// Width and height of the image in pixels
 final int imageWidth = 640;
 final int imageHeight = 480;
 
-final int buttonWidth = 100;
-final int buttonHeight = 20;
-final int buttonMargin = 10;
-
-// Features configuration
+// Turn some features on and off
 final boolean detectFaces = false,
               drawBlocks = false;
 
+Serial myPort;
 OpenCV opencv;
 Capture cam;
 PFont f;
 
-// This is in greyscale order
+// This is in greyscale order, 23 characters
+// So a box whose average 1-luma is > 22/23 will be M.
 final String palette = "   ...',;:clodxkO0KXNWM";
 
+// Character size we are printing on screen
 final int textHeight = 14;
 
+// Array representing the rendered ASCII image
 ArrayList<String> ascii;
 
 void setup() {
+  // Window size
   size(imageWidth*2, imageHeight, P2D);
+  
+  // Create font
   f = createFont("Courier", textHeight, true);
   textFont(f);
+  
+  // Set up webcam
   cam = new Capture(this, imageWidth, imageHeight, 30);
   cam.start();
   frameRate(10);
   
+  // Set up OpenCV
   opencv = new OpenCV(this, imageWidth, imageHeight);
+
+  if (detectFaces) {
+    opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE);
+  }
+  
+  // Set up serial port. We will operate fine without one.
   try {  
     myPort = new Serial(this, serialDev, 115200);
     println("serial port opened");
   } catch (RuntimeException e) {
     println("serial port not present: " + e.toString());
-  }
-
-  if (detectFaces) {
-    opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE);
   }
 }
 
@@ -69,25 +79,30 @@ void draw() {
     frameNumber++;
 
     background(255);
+    
     cam.read();
     opencv.loadImage(cam);
     
+    // Convert to luma
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_RGB2Lab);
     opencv.setGray(opencv.getR());
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_Lab2RGB);
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_RGB2BGRA);
     
+    // Do contrast, then a threshold mask, based on mouse cursor position
     opencv.contrast(map(mouseY, 0, height, 0, 3));
     Mat original = opencv.getGray().clone();
     opencv.threshold((int)Math.round(map(mouseX, 0, width, 100, 200)));
     Core.bitwise_and(opencv.getGray(), original, original);
     
+    // Unmirror
     Core.flip(original, original, OpenCV.VERTICAL);
     
+    // Store our matrix back into the opencv object
     opencv.setGray(original);
 
+    // Extract image data from opencv object and display
     PImage img = opencv.getOutput();
-    
     image(img, 0, 0);
     
     if (detectFaces && frameNumber % 5 == 0) {
@@ -104,6 +119,7 @@ void draw() {
       }
     }
     
+    // Print the ASCII version on the right
     stroke(0);
     fill(0);
     textAlign(LEFT, TOP);
@@ -115,6 +131,7 @@ void draw() {
       text(row, imageWidth + 10, textY);
     }
 
+    // Print some instructions
     fill(0, 0, 255);
     text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-40);
     fill(255, 0, 0);
@@ -189,13 +206,6 @@ boolean isPrinting = false;
 int lastPrintDone = 0;
 
 void keyPressed() {
-//  if (! (mouseX >= width - buttonMargin - buttonWidth &&
-//         mouseX <= width - buttonMargin &&
-//         mouseY >= height - buttonMargin - buttonHeight &&
-//         mouseY <= height - buttonMargin)) {
-//    return;
-//  }
-
   if (key != 'p') {
     return;
   }
