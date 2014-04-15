@@ -6,6 +6,7 @@ import java.awt.Rectangle;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Mat;
 import org.opencv.core.Core;
+import org.opencv.core.Scalar;
 
 // This will probably be something like /dev/ttyUSB0 on Linux
 // and COM17 on Windows. We could add a user interface for this
@@ -27,7 +28,7 @@ final boolean detectFaces = false,
               drawBlocks = false;
 
 Serial myPort;
-OpenCV opencv;
+OpenCV opencv, maskcv;
 Capture cam;
 PFont f;
 
@@ -89,11 +90,17 @@ void draw() {
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_Lab2RGB);
     Imgproc.cvtColor(opencv.getColor(), opencv.getColor(), Imgproc.COLOR_RGB2BGRA);
     
-    // Do contrast, then a threshold mask, based on mouse cursor position
-    opencv.contrast(map(mouseY, 0, height, 0, 3));
+    // Threshold mask, based on mouse cursor position
+    Mat mask = opencv.getGray().clone();
+    
+    // Pre-contrast for threshold only
+    Core.multiply(mask, new Scalar(0.6), mask);
+    Imgproc.threshold(mask, mask, (int)Math.round(map(mouseX, 0, width, 0, 255)), 255, Imgproc.THRESH_BINARY);
+
+    // Contrast for the original image    
+    opencv.contrast(map(mouseY, 0, height, 0, 5));
     Mat original = opencv.getGray().clone();
-    opencv.threshold((int)Math.round(map(mouseX, 0, width, 100, 200)));
-    Core.bitwise_and(opencv.getGray(), original, original);
+    Core.bitwise_and(mask, original, original);
     
     // Unmirror
     Core.flip(original, original, OpenCV.VERTICAL);
@@ -217,17 +224,32 @@ void keyPressed() {
   
   if (ascii != null && myPort != null) {
     isPrinting = true;
-    println("reversing 16 times to align correctly");
-    for (int i = 0; i < 16; i++) {
+    println("reversing 17 times to align correctly");
+    for (int i = 0; i < 17; i++) {
       // should take 750 ms
       int m = millis();
       myPort.write(14);
       while (millis() < m + 750);
     }
     println("typing portrait...");
+
     lastPrintDone = millis();
     printAscii();
     println("done");
+
+    // sign the image
+    int n = millis();
+    myPort.write("                                                FACETRON6000\n");
+    while (millis() < n + 5000);
+    
+    println("forward 11 times to align correctly");
+    for (int i = 0; i < 11; i++) {
+      // should take 750 ms
+      int m = millis();
+      myPort.write("\n");
+      while (millis() < m + 750);
+    }
+
     isPrinting = false;
   }
 }
