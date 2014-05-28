@@ -7,11 +7,16 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Mat;
 import org.opencv.core.Core;
 import org.opencv.core.Scalar;
+import org.opencv.core.Point;
 
 // This will probably be something like /dev/ttyUSB0 on Linux
 // and COM17 on Windows. We could add a user interface for this
 // but we are lazy.
-final String serialDev = "/dev/cu.usbserial-AH00ZNA4";
+final String serialDev = "/dev/ttyUSB0";
+final String cameraDev = "/dev/video0";
+
+// Rotation, in degrees
+final int rotationDegrees = 180;
 
 // Width and height in ASCII characters
 // Aspect ratio may not necessarily match pixels because
@@ -51,13 +56,21 @@ void setup() {
   textFont(f);
   
   // Set up webcam
-  cam = new Capture(this, imageWidth, imageHeight, 30);
+  String[] cameras = Capture.list();
+  for (String camera : cameras) {
+    println(camera);
+  }
+  cam = new Capture(this, imageWidth, imageHeight, cameraDev, 30);
   cam.start();
   frameRate(10);
   
   // Set up OpenCV
   opencv = new OpenCV(this, imageWidth, imageHeight);
-
+  
+  // Set up rotation matrix
+  Point center = new Point(imageWidth/2, imageHeight/2);
+  rotationMatrix = Imgproc.getRotationMatrix2D(center, rotationDegrees, 1.0);
+  
   if (detectFaces) {
     opencv.loadCascade(OpenCV.CASCADE_FRONTALFACE);
   }
@@ -74,6 +87,7 @@ void setup() {
 int counter = 0;
 int frameNumber = 0;
 Rectangle[] faces;
+Mat rotationMatrix;
 
 void draw() {
   if (cam.available()) {
@@ -103,7 +117,12 @@ void draw() {
     Core.bitwise_and(mask, original, original);
     
     // Unmirror
-    Core.flip(original, original, OpenCV.VERTICAL);
+    Core.flip(original, original, OpenCV.VERTICAL);  
+    
+    // Rotation (necessary on Linux)
+    if (rotationDegrees != 0) {
+      Imgproc.warpAffine(original, original, rotationMatrix, original.size());
+    }
     
     // Store our matrix back into the opencv object
     opencv.setGray(original);
