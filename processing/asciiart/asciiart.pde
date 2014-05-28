@@ -283,12 +283,31 @@ void printAscii() {
       }
     }
     
+    // See if there are spaces at the end
+    int endSpaces = 0;
+    for (int i = s.length() - 1; i >= 0; i--) {
+      char c = s.charAt(i);
+      if (c == '\n') { continue; }
+      if (s.charAt(i) != ' ') {
+        break;
+      } else {
+        endSpaces++;
+      }
+    }
+    
     int m = millis();
 
     if (!blank) {
       // make sure each row takes at least 15 seconds
-      myPort.write(s);
-      while (millis() < m + 12*1000);
+      myPort.write(s.substring(0, s.length() - endSpaces));
+
+      // We stripped off the newline when we removed the trailing spaces
+      if (endSpaces > 0) {
+        myPort.write('\n');
+      }
+      
+      // Pause for the carriage
+      while (millis() < m + 12*1000 - endSpaces*100);
     } else {
       // make sure each newline takes at least 1 second
       myPort.write("\n");
