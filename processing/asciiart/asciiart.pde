@@ -258,7 +258,7 @@ void keyPressed() {
 
     // sign the image
     int n = millis();
-    myPort.write("                                                FACETRON6000\n");
+    myPort.write("Don't litter!                                   FACETRON6000\n");
     while (millis() < n + 5000);
     
     println("forward 11 times to align correctly");
@@ -307,7 +307,7 @@ void printAscii() {
       }
       
       // Pause for the carriage
-      while (millis() < m + 12*1000 - endSpaces*100);
+      while (millis() < m + 12*1000 - endSpaces*120);
     } else {
       // make sure each newline takes at least 1 second
       myPort.write("\n");
