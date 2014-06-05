@@ -12,11 +12,21 @@ import org.opencv.core.Point;
 // This will probably be something like /dev/ttyUSB0 on Linux
 // and COM17 on Windows. We could add a user interface for this
 // but we are lazy.
-final String serialDev = "/dev/ttyUSB0";
+final String serialDev = "/dev/cu.usbserial-AH00ZNA4";
 final String cameraDev = "/dev/video0";
+final String sliderDev = "/dev/cu.usbmodem12341";
 
 // Rotation, in degrees
-final int rotationDegrees = 180;
+final int rotationDegrees = 0;
+
+// Adjustment range
+final float thresholdMin = 0;
+final float thresholdMax = 255;
+final float contrastMin = 0;
+final float contrastMax = 5;
+
+float thresholdCurrent = 100;
+float contrastCurrent = 3;
 
 // Width and height in ASCII characters
 // Aspect ratio may not necessarily match pixels because
@@ -32,10 +42,14 @@ final int imageHeight = 480;
 final boolean detectFaces = false,
               drawBlocks = false;
 
-Serial myPort;
+Serial myPort, sliderPort;
 OpenCV opencv, maskcv;
 Capture cam;
 PFont f;
+StringBuffer serialBuffer;
+Integer previousControl = -1;
+
+boolean printNow = false;
 
 // This is in greyscale order, 23 characters
 // So a box whose average 1-luma is > 22/23 will be M.
@@ -60,7 +74,8 @@ void setup() {
   for (String camera : cameras) {
     println(camera);
   }
-  cam = new Capture(this, imageWidth, imageHeight, cameraDev, 30);
+//  cam = new Capture(this, imageWidth, imageHeight, cameraDev, 30);
+  cam = new Capture(this, imageWidth, imageHeight, 30);
   cam.start();
   frameRate(10);
   
@@ -81,6 +96,15 @@ void setup() {
     println("serial port opened");
   } catch (RuntimeException e) {
     println("serial port not present: " + e.toString());
+  }
+  
+  // Try to set up the slider device serial port
+  try {
+    sliderPort = new Serial(this, sliderDev, 115200);
+    println("slider serial port opened");
+    serialBuffer = new StringBuffer();
+  } catch (RuntimeException e) {
+    println("slider serial port not present: " + e.toString());
   }
 }
 
@@ -107,12 +131,18 @@ void draw() {
     // Threshold mask, based on mouse cursor position
     Mat mask = opencv.getGray().clone();
     
+    // Read settings from slider or cursor?
+    if (sliderPort == null) {
+      thresholdCurrent = map(mouseX, 0, width, thresholdMin, thresholdMax);
+      contrastCurrent = map(mouseY, 0, height, contrastMin, contrastMax);
+    }
+    
     // Pre-contrast for threshold only
     Core.multiply(mask, new Scalar(0.6), mask);
-    Imgproc.threshold(mask, mask, (int)Math.round(map(mouseX, 0, width, 0, 255)), 255, Imgproc.THRESH_BINARY);
+    Imgproc.threshold(mask, mask, (int)Math.round(thresholdCurrent), 255, Imgproc.THRESH_BINARY);
 
     // Contrast for the original image    
-    opencv.contrast(map(mouseY, 0, height, 0, 5));
+    opencv.contrast(contrastCurrent);
     Mat original = opencv.getGray().clone();
     Core.bitwise_and(mask, original, original);
     
@@ -162,6 +192,13 @@ void draw() {
     text("move cursor vertically for contrast, horizontally for threshold", imageWidth+10, imageHeight-40);
     fill(255, 0, 0);
     text("TOP OF PAPER MUST ALIGN WITH TOP OF CLEAR LID (we will reverse)", imageWidth+10, imageHeight-20);
+  }
+  
+  // Print triggered from control panel?
+  if (printNow) {
+    println("print triggered from control panel");
+    printNow = false;
+    doPrint();
   }
 }
 
@@ -236,10 +273,16 @@ void keyPressed() {
     return;
   }
 
+  doPrint();
+}
+ 
+void doPrint() { 
   if (isPrinting || millis() < lastPrintDone + 3000) {
     println("possible double print");
     return;
   }
+  
+  println("printing...");
   
   if (ascii != null && myPort != null) {
     isPrinting = true;
@@ -316,3 +359,34 @@ void printAscii() {
     
   }
 }
+
+void serialEvent(Serial p) {
+  if (p == sliderPort) {
+    serialBuffer.append(p.readString());
+    if (serialBuffer.length() == 0) {
+      return;
+    }
+    
+    try {
+      String[] m = match(serialBuffer.toString(), ".*a(\\d+),(\\d+),(\\d+)b");
+      if (m != null && m.length == 4) {
+        thresholdCurrent = map(Integer.parseInt(m[1]), 0, 1023, thresholdMin, thresholdMax);
+        contrastCurrent = map(Integer.parseInt(m[2]), 0, 1023, contrastMin, contrastMax);
+//        println("reading " + m[1] + " " + m[2] + " " + m[3]);
+        
+        Integer control = Integer.parseInt(m[3]);
+        if (!isPrinting && previousControl == 0 && control == 1) {
+          println("control panel triggering print");
+          printNow = true;
+        }
+        
+        previousControl = control;
+          
+        serialBuffer = new StringBuffer();
+      }
+    } catch (Exception e) {
+      println(e.toString());
+    }
+  }
+}
+
