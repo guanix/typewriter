@@ -64,7 +64,7 @@ ArrayList<String> ascii;
 int q_capacity = 1;
 
 
-class PrinterThread {
+class PrinterThread extends Thread {
 	public boolean isRunning = true;
 	public BlockingQueue<ArrayList<String>> queue = new ArrayBlockingQueue<ArrayList<String>>(q_capacity);
 
@@ -194,7 +194,7 @@ class Printer {
 	}
 
 	public boolean canPrint() {
-		return printer_thread.queue.remainingCapacity() != 0;
+		return printer_thread.queue.remainingCapacity() > 0 && !isPrinting;
 	}
 
 	public void startPrint(ArrayList<String> pic) {
@@ -423,12 +423,21 @@ ArrayList<String> toAscii(PImage img) {
 }
 
 void doPrint() {
+	found = false;
+	while(!found) {
+		for (Printer printer : printers) {
+			if (printer.canPrint()) {
+				printer.startPrint(ascii);
+				found = true;
+				break;
+			}
+		}
+	}
 	// This while loop will freeze the gui thread until the picture is "queued."
 	// This is the same behavior as the original, single printer, implementation.
 	while(true) {
 		for (Printer printer : printers) {
 			if (printer.canPrint()) {
-				printer.startPrint(ascii);
 				return;
 			}
 		}
