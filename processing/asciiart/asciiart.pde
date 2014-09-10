@@ -13,11 +13,12 @@ import org.opencv.core.Core;
 import org.opencv.core.Scalar;
 import org.opencv.core.Point;
 
-final String cameraDev = "/dev/video0";
-final String sliderDev = "/dev/cu.usbmodem12341";
+final String cameraDev = "/dev/video1";
+final String sliderDev = "/dev/ttyACM0";
+
 
 // Rotation, in degrees
-final int rotationDegrees = 0;
+final int rotationDegrees = 180;
 
 // Adjustment range
 final float thresholdMin = 0;
@@ -72,24 +73,24 @@ class PrinterThread extends Thread {
 	private int lastPrintDone = 0;
 
 	public PrinterThread(Printer printer) {
-		printer = printer;
+		this.printer = printer;
 	}
 
 	private void startPrint(ArrayList<String> pic) {
-		if (printer.isPrinting || millis() < lastPrintDone + 3000) {
+		if (this.printer.isPrinting || millis() < this.lastPrintDone + 3000) {
 			println("possible double print");
 			return;
 		}
 
 		println("printing...");
 
-		if (pic != null && printer.serialPort != null) {
-			printer.isPrinting = true;
+		if (pic != null && this.printer.serialPort != null) {
+			this.printer.isPrinting = true;
 			println("reversing 17 times to align correctly");
 			for (int i = 0; i < 17; i++) {
 				// should take 750 ms
 				int m = millis();
-				printer.serialPort.write(14);
+				this.printer.serialPort.write(14);
 				while (millis() < m + 750);
 			}
 			println("typing portrait...");
@@ -100,18 +101,17 @@ class PrinterThread extends Thread {
 
 			// sign the image
 			int n = millis();
-			printer.serialPort.write("Don't litter!                                   FACETRON6000\n");
+			this.printer.serialPort.write("Don't litter!                                   FACETRON6000\n");
 			while (millis() < n + 5000);
 
 			println("forward 11 times to align correctly");
 			for (int i = 0; i < 11; i++) {
 				// should take 750 ms
 				int m = millis();
-				printer.serialPort.write("\n");
+				this.printer.serialPort.write("\n");
 				while (millis() < m + 750);
-			}
-
-			printer.isPrinting = false;
+                        }
+			this.printer.isPrinting = false;
 		}
 	}
 
@@ -140,18 +140,18 @@ class PrinterThread extends Thread {
 			int m = millis();
 			if (!blank) {
 				// make sure each row takes at least 15 seconds
-				printer.serialPort.write(s.substring(0, s.length() - endSpaces));
+				this.printer.serialPort.write(s.substring(0, s.length() - endSpaces));
 
 				// We stripped off the newline when we removed the trailing spaces
 				if (endSpaces > 0) {
-					printer.serialPort.write('\n');
+					this.printer.serialPort.write('\n');
 				}
 
 				// Pause for the carriage
 				while (millis() < m + 12*1000 - endSpaces*120);
 			} else {
 				// make sure each newline takes at least 1 second
-				printer.serialPort.write("\n");
+				this.printer.serialPort.write("\n");
 				while (millis() < m + 1000);
 			}
 		}
@@ -170,36 +170,38 @@ class PrinterThread extends Thread {
 }
 
 class Printer {
-	public String serialDev;
+	public final String serialDev;
 	public Serial serialPort;
-	public Serial sliderPort;
 	public boolean isPrinting;
 	public StringBuffer serialBuffer = new StringBuffer();
 
 	private PrinterThread printer_thread;
 
 	public Printer(String serialDev) {
-		serialDev = serialDev;
-		printer_thread = new PrinterThread(this);
+		this.serialDev = serialDev;
+		this.printer_thread = new PrinterThread(this);
+                println("Printer(serialdev): " + serialDev);
 	}
 
 	public void connectSerial(PApplet parent) {
 		// Set up serial port. We will operate fine without one.
 		try {  
-			serialPort = new Serial(parent, serialDev, 115200);
+			this.serialPort = new Serial(parent, this.serialDev, 115200);
 			println("serial port opened");
 		} catch (RuntimeException e) {
-			println("serial port not present: " + e.toString());
+                        println("parent: ", parent.toString());
+                        println("serialdev: " + this.serialDev);
+			println("printer serial port not present: " + e.toString());
 		}
 	}
 
 	public boolean canPrint() {
-		return printer_thread.queue.remainingCapacity() > 0 && !isPrinting;
+		return this.printer_thread.queue.remainingCapacity() > 0 && !isPrinting;
 	}
 
 	public void startPrint(ArrayList<String> pic) {
 		try {
-			printer_thread.queue.put(pic);
+			this.printer_thread.queue.put(pic);
 		} catch (InterruptedException e) {
 			println("InterruptedException while queueing print job!");
 		}
@@ -210,14 +212,14 @@ class Printer {
 // and COM17 on Windows. We could add a user interface for this
 // but we are lazy.
 final Printer[] printers = new Printer[]{
-	new Printer("/dev/cu.usbserial-AH00ZNA4"),
-	new Printer("/dev/cu.usbserial-")
+	new Printer("/dev/ttyUSB0"),
+	new Printer("/dev/ttyUSB1")
 };
 
 
-Printer findPrinterBySliderPort(Serial p) {
+Printer findNextPrinter() {
 	for (Printer printer : printers) {
-		if (printer.serialPort == p) {
+		if (printer.canPrint()) {
 			return printer;
 		}
 	}
@@ -239,7 +241,7 @@ void setup() {
 	}
 
 	//  cam = new Capture(this, imageWidth, imageHeight, cameraDev, 30);
-	cam = new Capture(this, imageWidth, imageHeight, 30);
+	cam = new Capture(this, imageWidth, imageHeight, cameraDev, 30);
 	cam.start();
 	frameRate(10);
 
@@ -264,6 +266,7 @@ void setup() {
 
 	for (Printer printer : printers) {
 		printer.connectSerial(this);
+		printer.printer_thread.start();
 	}
 }
 
@@ -423,7 +426,7 @@ ArrayList<String> toAscii(PImage img) {
 }
 
 void doPrint() {
-	found = false;
+	boolean found = false;
 	while(!found) {
 		for (Printer printer : printers) {
 			if (printer.canPrint()) {
@@ -452,7 +455,7 @@ void keyPressed() {
 }
 
 void serialEvent(Serial p) {
-	Printer printer = findPrinterBySliderPort(p);
+	Printer printer = findNextPrinter();
 
 	if (printer != null) {
 		printer.serialBuffer.append(p.readString());
